@@ -92,7 +92,16 @@ func main() {
 		apiKey = os.Getenv("GEMINI_API_KEY")
 	}
 	if apiKey == "" {
-		fmt.Fprintln(os.Stderr, "Error: API key required. Use -k flag or set GEMINI_API_KEY")
+		// Try config file
+		if home, err := os.UserHomeDir(); err == nil {
+			keyFile := filepath.Join(home, ".config", "gemini", "api_key")
+			if data, err := os.ReadFile(keyFile); err == nil {
+				apiKey = strings.TrimSpace(string(data))
+			}
+		}
+	}
+	if apiKey == "" {
+		fmt.Fprintln(os.Stderr, "Error: API key required. Use -k flag, set GEMINI_API_KEY, or store in ~/.config/gemini/api_key")
 		os.Exit(1)
 	}
 
