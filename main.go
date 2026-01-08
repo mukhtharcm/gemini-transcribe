@@ -15,8 +15,9 @@ import (
 )
 
 const (
-	defaultModel = "gemini-2.5-flash"
-	apiURL       = "https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s"
+	defaultModel   = "gemini-2.5-flash"
+	defaultBaseURL = "https://generativelanguage.googleapis.com"
+	apiURLTemplate = "%s/v1beta/models/%s:generateContent?key=%s"
 )
 
 type GeminiRequest struct {
@@ -56,6 +57,7 @@ func main() {
 		inputFile  string
 		apiKey     string
 		model      string
+		baseURL    string
 		prompt     string
 		outputJSON bool
 		verbose    bool
@@ -67,6 +69,8 @@ func main() {
 	flag.StringVar(&apiKey, "key", "", "Gemini API key (or set GEMINI_API_KEY)")
 	flag.StringVar(&model, "m", defaultModel, "Gemini model to use")
 	flag.StringVar(&model, "model", defaultModel, "Gemini model to use")
+	flag.StringVar(&baseURL, "base-url", "", "Custom API base URL (or set GEMINI_BASE_URL)")
+	flag.StringVar(&baseURL, "b", "", "Custom API base URL (or set GEMINI_BASE_URL)")
 	flag.StringVar(&prompt, "p", "Transcribe this audio accurately. Output only the transcription, no extra commentary.", "Custom prompt")
 	flag.StringVar(&prompt, "prompt", "Transcribe this audio accurately. Output only the transcription, no extra commentary.", "Custom prompt")
 	flag.BoolVar(&outputJSON, "json", false, "Output as JSON")
@@ -82,6 +86,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "  gemini-transcribe -i audio.mp3\n")
 		fmt.Fprintf(os.Stderr, "  gemini-transcribe -i video.mp4 -m gemini-2.5-flash\n")
 		fmt.Fprintf(os.Stderr, "  gemini-transcribe -i recording.wav --json\n")
+		fmt.Fprintf(os.Stderr, "  gemini-transcribe -i audio.ogg -b https://gemini-proxy.example.workers.dev\n")
 		fmt.Fprintf(os.Stderr, "\nSupported formats: mp3, wav, ogg, flac, m4a, mp4, webm, mov, avi, mkv\n")
 	}
 
@@ -104,6 +109,16 @@ func main() {
 		fmt.Fprintln(os.Stderr, "Error: API key required. Use -k flag, set GEMINI_API_KEY, or store in ~/.config/gemini/api_key")
 		os.Exit(1)
 	}
+
+	// Get base URL
+	if baseURL == "" {
+		baseURL = os.Getenv("GEMINI_BASE_URL")
+	}
+	if baseURL == "" {
+		baseURL = defaultBaseURL
+	}
+	// Remove trailing slash if present
+	baseURL = strings.TrimSuffix(baseURL, "/")
 
 	// Validate input
 	if inputFile == "" {
@@ -130,7 +145,7 @@ func main() {
 	}
 
 	// Call Gemini API
-	transcription, err := transcribe(apiKey, model, audioData, mimeType, prompt)
+	transcription, err := transcribe(apiKey, model, baseURL, audioData, mimeType, prompt)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error transcribing: %v\n", err)
 		os.Exit(1)
@@ -245,7 +260,7 @@ func getMimeType(ext string) string {
 	return "application/octet-stream"
 }
 
-func transcribe(apiKey, model string, audioData []byte, mimeType, prompt string) (string, error) {
+func transcribe(apiKey, model, baseURL string, audioData []byte, mimeType, prompt string) (string, error) {
 	// Build request with inline data (base64 encoded)
 	req := GeminiRequest{
 		Contents: []Content{
@@ -270,7 +285,7 @@ func transcribe(apiKey, model string, audioData []byte, mimeType, prompt string)
 		return "", err
 	}
 
-	url := fmt.Sprintf(apiURL, model, apiKey)
+	url := fmt.Sprintf(apiURLTemplate, baseURL, model, apiKey)
 	resp, err := http.Post(url, "application/json", bytes.NewReader(reqBody))
 	if err != nil {
 		return "", err
