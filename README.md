@@ -8,6 +8,7 @@ A lightweight Go CLI for transcribing audio/video files using Google Gemini API.
 - 🎬 Automatic audio extraction from video via ffmpeg
 - 📁 Supports audio: mp3, wav, ogg, flac, m4a, aac
 - 🎥 Supports video: mp4, webm, mov, avi, mkv
+- 🌐 Custom API endpoint support (for proxies)
 - ⚡ Single binary, minimal dependencies
 
 ## Installation
@@ -63,9 +64,50 @@ gemini-transcribe -i audio.mp3 -v
 | `-i, --input` | Input audio/video file | (required) |
 | `-k, --key` | Gemini API key | `$GEMINI_API_KEY` |
 | `-m, --model` | Gemini model | `gemini-2.5-flash` |
+| `-b, --base-url` | Custom API base URL | `$GEMINI_BASE_URL` |
 | `-p, --prompt` | Custom prompt | Transcribe accurately |
 | `--json` | Output as JSON | false |
 | `-v, --verbose` | Verbose output | false |
+
+## Using a Proxy (Cloudflare Workers)
+
+If you're running on a server where the Gemini API is geo-restricted, you can use a Cloudflare Worker as a proxy.
+
+### 1. Deploy a simple proxy worker
+
+Create a Cloudflare Worker with this code:
+
+```javascript
+export default {
+  async fetch(request) {
+    const url = new URL(request.url);
+    
+    // Forward to Gemini API
+    const geminiUrl = `https://generativelanguage.googleapis.com${url.pathname}${url.search}`;
+    
+    const response = await fetch(geminiUrl, {
+      method: request.method,
+      headers: { "Content-Type": "application/json" },
+      body: request.method !== "GET" ? request.body : undefined
+    });
+    
+    return new Response(response.body, response);
+  }
+}
+```
+
+### 2. Use the proxy
+
+```bash
+# Via flag
+gemini-transcribe -i audio.ogg -b https://your-proxy.workers.dev
+
+# Via environment variable
+export GEMINI_BASE_URL="https://your-proxy.workers.dev"
+gemini-transcribe -i audio.ogg
+```
+
+This bypasses geo-restrictions by routing API calls through Cloudflare's global network.
 
 ## How it works
 
